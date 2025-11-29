@@ -1,36 +1,30 @@
-# Stage 1 - Build Frontend (Vite)
-FROM node:22 AS frontend
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
+# Use PHP + Nginx + PHP-FPM base — make sure PHP version matches your Laravel
+FROM richarvey/nginx-php-fpm:latest
 
-# Stage 2 - Backend (Laravel + PHP + Composer)
-FROM php:8.1-fpm AS backend
+# Install Node + npm
+RUN apt-get update && \
+    apt-get install -y curl nodejs npm && \
+    npm install -g npm@latest
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git curl unzip libpq-dev libonig-dev libzip-dev zip \
-    && docker-php-ext-install pdo pdo_mysql mbstring zip
+WORKDIR /var/www/html
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-WORKDIR /var/www
-
-# Copy app files
+# Copy project files
 COPY . .
 
-# Copy built frontend from Stage 1
-COPY --from=frontend /app/public/dist ./public/dist
+# Allow composer as root
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
-# Install PHP dependencies
+# Install PHP deps
 RUN composer install --no-dev --optimize-autoloader
 
-# Laravel setup
-RUN php artisan config:clear && \
-    php artisan route:clear && \
-    php artisan view:clear
+# Build frontend assets
+RUN npm install
+RUN npm run build
 
-CMD ["php-fpm"]
+# Permissions, etc. (if needed)
+
+# Expose port — Render uses 80 internally
+EXPOSE 80
+
+# Start server via provided start script
+CMD ["/start.sh"]
